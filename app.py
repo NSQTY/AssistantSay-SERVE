@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from threading import Timer
@@ -44,9 +45,12 @@ def overload():
         f.write(f'{datetime.now().isoformat()} | {reason}\n')
 
     def restart():
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        # Windows 上 os.execv 替换进程不可靠(端口/句柄残留, 新进程起不来):
+        # 改为 起新进程 + 旧进程立即退出(退出即释放端口, 新进程 1~2s 后接管)
+        subprocess.Popen([sys.executable] + sys.argv, close_fds=True)
+        os._exit(0)
 
-    Timer(0.5, restart).start()                 # 0.5s 后替换进程, 让 200 先送达
+    Timer(0.5, restart).start()                 # 0.5s 后重启, 让 200 先送达
     return System.jsonify({'overload': 'triggered', 'reason': reason,
                            'effect': '0.5s 后重启'})
 
