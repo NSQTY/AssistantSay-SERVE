@@ -3,10 +3,12 @@ import System                      # 第三方依赖从门面取, 不直接 impo
 
 
 def RegisterBlueprints(app):
-    """注册应用上所有已挂载且未注册的蓝图(属性即蓝图, 幂等)"""
+    """注册应用上所有已挂载且未注册的蓝图(属性即蓝图, 幂等); 同时强制名字合一校验"""
     for name in dir(app):
         bp = getattr(app, name)
         if isinstance(bp, System.Blueprint) and bp.name not in app.blueprints:
+            if bp.url_prefix and bp.url_prefix != '/' + bp.name:
+                raise TypeError(f'名字合一违例: 蓝图名 {bp.name} != url_prefix {bp.url_prefix}')
             app.register_blueprint(bp)
 
 

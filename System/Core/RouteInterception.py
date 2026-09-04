@@ -27,6 +27,9 @@ def CheckRequester(handler: 'System.VerificationLibrary.FunctionHandler' = None)
     成功/失败统一信封: {"result": ...} / {"error": ...}
     """
     handler: 'System.VerificationLibrary.FunctionHandler' = handler or System.VerificationLibrary.FunctionHandler()
+    # 家族强制: handler 必须是官方校验库 FunctionHandler 家族实例(API 型基座或其子类), 第三方不可自带校验器
+    if not isinstance(handler, System.VerificationLibrary.FunctionHandler):
+        raise TypeError(f'CheckRequester handler 必须是 FunctionHandler 家族实例(官方校验库), 收到: {type(handler).__name__}')
 
     def decorator(func):
         contract = _parse_contract(func)          # ① 装饰时: 契约初始化建立
