@@ -114,6 +114,33 @@ def Hello(name: Annotated[str, '名字'], ...): ...
 ```
 依赖声明写 `AssistantSay_HANDLER_V2`。信息键不参与 POST 白名单（骨架只认参数契约）。
 
+### 3.4 复用现成 API（一等公民 · 禁止重叠）
+
+开发任何功能前**先查**系统有没有现成 API：
+- 运行态：`GET /` → `GET /Documentation/get_blueprints` → `POST /Documentation/get_blueprint_routes`（蓝图=插件、函数=工具）；
+- 开发态：FT 仓库（官方插件）与 VL 仓库（校验库）README。
+
+**找到了 → 调用它，禁止从零重写**（会与已有 API 重叠/分叉能力）。两种复用形态都允许：
+
+```python
+import requests, System
+
+def call_api(path: str, payload: dict):
+    base = System.flask.request.host_url.rstrip('/')      # 动态基址, 不写死
+    r = requests.post(base + path, json=payload, timeout=10)
+    r.raise_for_status()
+    return r.json()                                        # 统一信封 {"result": ...} / {"error": ...}
+
+@Tools.route('/Enriched', methods=['POST', 'GET'])
+@System.RouteInterception.CheckRequester()
+def Enriched():
+    data = call_api('/Workspace/WorksList', {})            # ① 底层现成 API
+    enabled = [w for w in data['result'] if w.get('enabled')]   # ② 二次解析/加工
+    return {'total': len(data['result']), 'enabled': enabled}   # 或直接 return data['result'] 透传
+```
+
+**通道约定**：插件内调用现成 API 一律 `requests.post`（基址取 `request.host_url`）；禁止重复造可能与某 API 重叠的底层代码。
+
 ## 4. 如何协助开发校验库（官方身份 Agent）
 
 校验库 = VerificationLibrary 官方资产，**第三方只能选型、不能另造**。以官方身份开发时（受官方指示）：
@@ -133,6 +160,8 @@ def Hello(name: Annotated[str, '名字'], ...): ...
 - [ ] 我没有自带校验器 / 没有绕过白名单 / 没有在 handler 里执行函数
 - [ ] 我的插件遵守：能力定位(头) + 依赖声明(尾)、名字合一、路径=函数名、禁写根路由
 - [ ] 登记/装配后我执行了 `POST /overload`，且只经重载生效
+- [ ] 我没有重复造与系统已有 API 重叠的底层代码（复用优先：`requests.post` 调现成 API，可透传 result 或在其上二次加工）
+- [ ] 我的插件没有与已有蓝图重名（Workspace 登记预注册会拒绝：未创建新蓝图即拒）
 - [ ] 文档细节不一致时，以 GitHub 仓库根 README 为准（唯一源），发现文档过时请报告官方
 
 ## 6. 仓库导航（深文档单向引用）
