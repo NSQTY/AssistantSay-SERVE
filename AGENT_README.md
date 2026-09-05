@@ -22,18 +22,97 @@
 
 ## 3. 如何开发外部插件（第三方 Agent 标准动作）
 
-1. 在你的工作区建插件目录 `<插件名>/`，必备：
-   - `README.md`（头部「能力定位」，尾部「## 依赖声明」）
-   - 蓝图模块（模块级 `AR.CBP.<插件名>.ModifyConfiguration(url_prefix='/<插件名>', ...)`；名字合一；禁写根路由，路径=函数名；套 `@CheckRequester()`）
-2. 依赖取用：`import System`（唯一门面）；校验器只从官方家族选型（基座 / V2 信息型 `VerificationLibrary.AssistantSay_HANDLER_V2`），**不自造校验器**
-3. **登记**（不 copy、不改 init）：
-   ```
-   POST /Workspace/RegistrationWorks  {"WorksPath": "你的插件目录", "Module": "蓝图模块文件名"}
-   ```
-   → Workspace 做 README 校验 + **预注册导入测试**（有 bug 当场被拒，改好重试）
-4. `POST /overload?reason=登记了<插件名>` → 生效
-5. 启停/卸载走 `WorksStatus` / `RemoveWorks`（卸载后重装 = 重新登记）
-   （前置：SERVE 已由官方装配 Workspace——clone 后未装则先按 SERVE README「依赖与首次装配」执行官方安装步骤）
+插件留在你自己的目录，SERVE 只通过 API 见你。目录结构（最小）：
+
+```
+MyPlugin/
+├── README.md      ← 头部「能力定位」+ API 说明 + 尾部「## 依赖声明」
+└── plugin.py      ← 蓝图模块（模块级建蓝图）
+```
+
+### 3.1 API 型插件（现在就能用 · 完整示例）
+
+`plugin.py`：
+```python
+"""MyPlugin: API 型外部插件示例(校验器: 基座 FunctionHandler)"""
+import System
+from typing import Annotated
+
+# 蓝图即属性: 名字合一(蓝图名 == url_prefix); 禁写根路由; 路径 = 函数名
+Tools = System.FlaskApp.AR.CBP.MyPlugin.ModifyConfiguration(url_prefix='/MyPlugin')
+
+@Tools.route('/Hello', methods=['POST', 'GET'])
+@System.RouteInterception.CheckRequester()
+def Hello(name: Annotated[str, '名字(必填)'], times: Annotated[int, '重复次数, 默认 1'] = 1) -> Annotated[dict, '问候结果']:
+    '''简单问候 API: POST 才执行, GET 返回契约'''
+    return {'greeting': ('你好 ' + name + '! ') * times}
+```
+
+`README.md`：
+```markdown
+# MyPlugin
+
+## 能力定位
+一句话：这个插件解决什么问题。
+
+## API（统一信封）
+| POST/GET | /MyPlugin/Hello | name: str 必填, times: int 默认1 | 问候结果 |
+
+## 依赖声明
+- 校验库版本：基座
+```
+
+登记（不 copy、不改 init）：
+```
+POST /Workspace/RegistrationWorks  {"WorksPath": "你的插件目录绝对路径", "Module": "plugin.py"}
+POST /overload?reason=登记了MyPlugin        ← 生效(启动时自动装配)
+```
+
+### 3.2 页面型插件（前置：SERVE 已挂载官方页面分支）
+
+页面 = GET 返回 HTML（浏览器直达；webui/Agent 靠响应自证识别）。校验器**只能从官方家族选**——现成页面分支 = VL 的 `AssistantSay_HANDLER_V1`（home 语义，冻结）；官方发布新页面分支后同样引用、依赖声明随之更新。
+
+`plugin.py`：
+```python
+"""PagePlugin: 页面型外部插件示例(校验器: VL 页面分支, 官方挂载)"""
+import System
+from pathlib import Path
+from VerificationLibrary.AssistantSay_HANDLER_V1 import Handler as PageHandler
+
+Page = System.FlaskApp.AR.CBP.PagePlugin.ModifyConfiguration(
+    url_prefix='/PagePlugin',
+    static_folder=str(Path(__file__).resolve().parent / 'static'),   # 必须绝对路径(见 VL 契约)
+)
+
+@Page.route('/home', methods=['GET'])          # 禁写根路由: 命名路径即可
+@System.RouteInterception.CheckRequester(handler=PageHandler())
+def home(): ...
+```
+
+目录需含 `static/index.html`（页面内容）。README 尾部：
+```markdown
+## 依赖声明
+- 校验库版本：AssistantSay_HANDLER_V1（页面分支）
+```
+
+### 3.3 信息自证（V2 信息型，可选升级）
+
+想让 API 的 GET 自带「蓝图信息 / api信息 / 自定义信息」（webui 看板据此渲染）：
+```python
+from VerificationLibrary.AssistantSay_HANDLER_V2 import Handler as InfoHandler
+
+Tools = System.FlaskApp.AR.CBP.MyPlugin.ModifyConfiguration(
+    url_prefix='/MyPlugin',
+    蓝图信息={'能力': '一句话能力'},              # 蓝图级: 挂蓝图一次, 全蓝图 API 自证
+)
+@Tools.route('/Hello', methods=['POST', 'GET'])
+@System.RouteInterception.CheckRequester(handler=InfoHandler(
+    api信息={'用途': '问候', '示例': '{"name":"张三"}'},
+    自定义信息={'分组': '示例'},
+))
+def Hello(name: Annotated[str, '名字'], ...): ...
+```
+依赖声明写 `AssistantSay_HANDLER_V2`。信息键不参与 POST 白名单（骨架只认参数契约）。
 
 ## 4. 如何协助开发校验库（官方身份 Agent）
 
