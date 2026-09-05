@@ -146,6 +146,13 @@ def Enriched():
 
 **通道约定**：插件内调用现成 API 一律 `requests.post`（基址取 `request.host_url`）；禁止重复造可能与某 API 重叠的底层代码。
 
+**通用 API 复用示范（外部插件也能调）**：`/Workspace/browse`（服务器目录浏览，只列目录名不读内容）——需要"列目录/选文件夹"类功能时直接复用，别再自建文件浏览端点：
+```python
+data = call_api('/Workspace/browse', {'path': 'Y:\\AssistantSay'})   # {} 空 = 盘符列表
+dirs = data['dirs']          # 子目录名
+# data 含 {path, parent, drives, dirs}; 用 requests 的插件记得在 requirements.txt 写 requests
+```
+
 ## 4. 如何协助开发校验库（官方身份 Agent）
 
 校验库 = VerificationLibrary 官方资产，**第三方只能选型、不能另造**。以官方身份开发时（受官方指示）：
