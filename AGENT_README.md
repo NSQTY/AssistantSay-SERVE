@@ -22,17 +22,21 @@
 
 ## 3. 如何开发外部插件（第三方 Agent 标准动作）
 
-插件留在你自己的目录，SERVE 只通过 API 见你。目录结构（最小）：
+插件留在你自己的目录，SERVE 只通过 API 见你。**外部插件 = 一个 Python 包**（目录名=包名，须为合法标识符；目录绝不进 SERVE）：
 
 ```
-MyPlugin/
-├── README.md      ← 头部「能力定位」+ API 说明 + 尾部「## 依赖声明」
-└── plugin.py      ← 蓝图模块（模块级建蓝图）
+MyPlugin/                  ← 插件包(你的目录)
+├── README.md              ← 头部「能力定位」+ API + 尾部「## 依赖声明」(必备)
+├── requirements.txt       ← 必备: Python 第三方依赖(pip 格式, 无依赖可为空)
+├── __init__.py            ← 包身份证(可为空注释)——让目录成为包, main.py 才能相对导入
+├── main.py                ← 蓝图入口(固定名! 模块级建蓝图, Workspace 认它)
+├── helpers/ ...           ← 子包/子模块 任意嵌套(main.py 内 from .helpers import x)
+└── static/ data/ ...      ← 资源/数据(Path(__file__).resolve().parent 绝对定位)
 ```
 
 ### 3.1 API 型插件（现在就能用 · 完整示例）
 
-`plugin.py`：
+`main.py`（蓝图入口，固定名）：
 ```python
 """MyPlugin: API 型外部插件示例(校验器: 基座 FunctionHandler)"""
 import System
@@ -47,6 +51,7 @@ def Hello(name: Annotated[str, '名字(必填)'], times: Annotated[int, '重复�
     '''简单问候 API: POST 才执行, GET 返回契约'''
     return {'greeting': ('你好 ' + name + '! ') * times}
 ```
+同目录还需：`__init__.py`（空/注释）+ `README.md` + `requirements.txt`（无依赖留空）。
 
 `README.md`：
 ```markdown
@@ -62,17 +67,17 @@ def Hello(name: Annotated[str, '名字(必填)'], times: Annotated[int, '重复�
 - 校验库版本：基座
 ```
 
-登记（不 copy、不改 init）：
+登记（不 copy、不改 init；入口固定 main.py，无需指定模块）：
 ```
-POST /Workspace/RegistrationWorks  {"WorksPath": "你的插件目录绝对路径", "Module": "plugin.py"}
+POST /Workspace/RegistrationWorks  {"WorksPath": "你的插件包目录绝对路径"}
 POST /overload?reason=登记了MyPlugin        ← 生效(启动时自动装配)
 ```
 
 ### 3.2 页面型插件（前置：SERVE 已挂载官方页面分支）
 
-页面 = GET 返回 HTML（浏览器直达；webui/Agent 靠响应自证识别）。校验器**只能从官方家族选**——现成页面分支 = VL 的 `AssistantSay_HANDLER_V1`（home 语义，冻结）；官方发布新页面分支后同样引用、依赖声明随之更新。
+页面 = GET 返回 HTML（浏览器直达；webui/Agent 靠响应自证识别）。校验器**只能从官方家族选**——现成页面分支 = VL 的 `AssistantSay_HANDLER_V1`（home 语义，冻结）；官方发布新页面分支后同样引用、依赖声明随之更新。包结构同 3.1（`__init__.py` + `requirements.txt` + `README.md` + `static/`），蓝图入口固定 `main.py`：
 
-`plugin.py`：
+`main.py`：
 ```python
 """PagePlugin: 页面型外部插件示例(校验器: VL 页面分支, 官方挂载)"""
 import System
